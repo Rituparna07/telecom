@@ -35,6 +35,26 @@ const parseExcelDate = (value) => {
 };
 
 /* ======================================
+   PERCENTAGE FORMATTER FOR QC
+====================================== */
+const formatPercentage = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  let str = value.toString().trim();
+  if (str.endsWith("%")) return str;
+
+  let num = Number(str);
+  if (!isNaN(num)) {
+    // If Excel stores percentage as decimal (e.g., 0.9 -> 90%, 0.95 -> 95%)
+    if (num > 0 && num <= 1) {
+      return `${Math.round(num * 100)}%`;
+    } else {
+      return `${num}%`;
+    }
+  }
+  return str;
+};
+
+/* ======================================
    MONTH HELPERS
 ====================================== */
 const getMonthValue = (row) => {
@@ -77,14 +97,13 @@ const cleanMonthArray = (arr) => {
 const extractUOM = (row) => {
   const uom = {};
 
-  // Fields that should strictly NOT go into UOM
   const skipColumns = [
     "sow", "job type", "job_type", "state", "market", "month", "month of service", 
     "otp", "amdocs qc", "amdocs_qc", "internal qc", "internal_qc", 
-    "job id", "job_id", "jobid", "sl.no", "sl no", "footage", 
+    "job id", "job_id", "jobid", "sl.no", "sl no", "sl.", "sl", "footage", 
     "splice count", "receive date", "ecd date", "submission date", 
-    "current status", "production engineers", "qc engineers", "region",
-    "sl_no", "slno"
+    "current status", "production engineers", "production engineers:", "qc engineers", 
+    "region", "sl_no", "slno", "received date"
   ];
 
   Object.keys(row).forEach((key) => {
@@ -285,12 +304,8 @@ const importExcel = async (req, res) => {
             
             const otpVal = clean(row.OTP || row.otp || "");
             
-            // Format QC values with % if numeric/provided
-            let amdocsQcVal = clean(row["Amdocs QC"] || row["AMDOCS QC"] || row.amdocs_qc || "");
-            if (amdocsQcVal && !amdocsQcVal.endsWith("%")) amdocsQcVal += "%";
-
-            let internalQcVal = clean(row["Internal QC"] || row["INTERNAL QC"] || row.internal_qc || "");
-            if (internalQcVal && !internalQcVal.endsWith("%")) internalQcVal += "%";
+            const amdocsQcVal = formatPercentage(row["Amdocs QC"] || row["AMDOCS QC"] || row.amdocs_qc);
+            const internalQcVal = formatPercentage(row["Internal QC"] || row["INTERNAL QC"] || row.internal_qc);
             
             const receiveDateVal = parseExcelDate(row["Receive Date"] || row.receive_date);
             const ecdDateVal = parseExcelDate(row["ECD Date"] || row.ecd_date);
@@ -522,11 +537,8 @@ const createWork = (req, res) => {
   const fixedJobType = normalize(job_type);
   const cleanJobId = clean(job_id);
 
-  let formattedInternalQc = clean(internal_qc);
-  if (formattedInternalQc && !formattedInternalQc.endsWith("%")) formattedInternalQc += "%";
-
-  let formattedAmdocsQc = clean(amdocs_qc);
-  if (formattedAmdocsQc && !formattedAmdocsQc.endsWith("%")) formattedAmdocsQc += "%";
+  const formattedInternalQc = formatPercentage(internal_qc);
+  const formattedAmdocsQc = formatPercentage(amdocs_qc);
   
   let parsedMonths = [];
   if (Array.isArray(months)) {
@@ -627,11 +639,8 @@ const updateWork = (req, res) => {
   const fixedJobType = normalize(job_type);
   const cleanJobId = clean(job_id);
 
-  let formattedInternalQc = clean(internal_qc);
-  if (formattedInternalQc && !formattedInternalQc.endsWith("%")) formattedInternalQc += "%";
-
-  let formattedAmdocsQc = clean(amdocs_qc);
-  if (formattedAmdocsQc && !formattedAmdocsQc.endsWith("%")) formattedAmdocsQc += "%";
+  const formattedInternalQc = formatPercentage(internal_qc);
+  const formattedAmdocsQc = formatPercentage(amdocs_qc);
 
   let parsedMonths = [];
   if (Array.isArray(months)) {
@@ -831,7 +840,7 @@ const getStateWiseJobs = (req, res) => {
   );
 };
 
-const getDomainLastUpdate = (req, res) => {
+const getDomainLastUpdate, getDomainLastUpdate = (req, res) => {
   const sql = `SELECT domain, MAX(updated_at) AS lastUpdate FROM work_updates GROUP BY domain`;
 
   db.query(sql, (err, rows) => {
